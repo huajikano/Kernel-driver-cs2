@@ -1,33 +1,50 @@
 #ifndef _COMMON_H_
 #define _COMMON_H_
 
-#include <Windows.h> // 包含用户态和内核态都需要的一些基本定义，例如SIZE_T, ULONG等
+#include <Windows.h>
 
-// 定义用于用户态和内核态通信的IOCTL代码
-// CTL_CODE(DeviceType, Function, Method, Access)
-// FILE_DEVICE_UNKNOWN: 通用设备类型
-// 0x800, 0x801: 自定义函数码，确保不与现有系统IOCTL冲突
-// METHOD_BUFFERED: I/O 缓冲区传输方法。用户态和内核态使用同一个缓冲区，系统会自动在两者之间拷贝数据。
-//                  适用于小到中等大小的数据传输。
-// FILE_ANY_ACCESS: 任何访问权限都可以调用此IOCTL
+// --- 定义用于用户态和内核态通信的IOCTL代码 ---
+// 读写单个地址的IOCTL (保持不变)
 #define IOCTL_READ_PROCESS_MEMORY \
     CTL_CODE(FILE_DEVICE_UNKNOWN, 0x800, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
 #define IOCTL_WRITE_PROCESS_MEMORY \
     CTL_CODE(FILE_DEVICE_UNKNOWN, 0x801, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
-// 定义用户态请求内核驱动执行内存操作时传入的数据结构
-// 这个结构体在用户态和内核态都必须保持一致，以确保正确的数据解析
+// 新增IOCTL：读取CS2游戏数据
+#define IOCTL_READ_CS2_GAME_DATA \
+    CTL_CODE(FILE_DEVICE_UNKNOWN, 0x802, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+// --- 定义用户态请求和内核返回的数据结构 ---
+// 用于读写单个地址的请求结构 (保持不变)
 typedef struct _MEM_OPERATION_REQUEST {
-    ULONG ProcessId;       // 目标进程的PID
-    ULONGLONG TargetAddress; // 目标进程中要读写内存的虚拟地址
-    SIZE_T Size;           // 要读写的数据字节数
-    // 注意：对于METHOD_BUFFERED，实际要读写的数据缓冲区由DeviceIoControl的lpInBuffer/lpOutBuffer参数提供
-    // 而不是包含在这个结构体内部。这个结构体只包含元数据。
+    ULONG ProcessId;
+    ULONGLONG TargetAddress;
+    SIZE_T Size;
 } MEM_OPERATION_REQUEST, *PMEM_OPERATION_REQUEST;
 
-// 驱动设备名称和符号链接名称
-// 用户态程序通过符号链接名称来打开驱动设备
+// 用于传输玩家坐标和血量数据的结构体
+typedef struct _PLAYER_DATA {
+    float x;
+    float y;
+    float z;
+    int Health;
+} PLAYER_DATA, *PPLAYER_DATA;
+
+// 用于传输所有游戏数据的响应结构体
+// 这个结构体将被内核驱动填充，然后拷贝回用户态
+#define MAX_PLAYERS 10 // 1个本地玩家 + 9个其他玩家
+typedef struct _CS2_GAME_DATA {
+    // 玩家数据数组 (索引0为本地玩家，1-9为其他玩家)
+    PLAYER_DATA Players[MAX_PLAYERS];
+    // FOV 数据
+    float FovX;
+    float FovY;
+    // 错误状态，如果读取失败可以返回给用户态
+    NTSTATUS Status;
+} CS2_GAME_DATA, *PCS2_GAME_DATA;
+
+// 驱动设备名称和符号链接名称 (保持不变)
 #define DRIVER_DEVICE_NAME  L"\\Device\\MyProcessMemoryDriver"
 #define DRIVER_SYMBOLIC_LINK L"\\DosDevices\\MyProcessMemoryDriverLink"
 
